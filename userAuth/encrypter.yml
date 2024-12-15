@@ -1,0 +1,20 @@
+security:
+  #
+  # This is the salt string length use by encryption.
+  # The longer the string the more secure it is.
+  # This come at a cost of computation time.
+  #
+  salt: 8
+  #
+  # Your jwt secured key, please generate or make your own key.
+  # As a default config I just put one here for functionality.
+  # The jwt_key_short is the short term token.
+  # The jwt_key_long is the long term token.
+  #
+  jwt_key_short: 'thi5|sLPAMBTot411yPr!v476Key'
+  jwt_key_long: '@1ongTermKey4LPAMBSvM4keUxerAuthT0k6n'
+  #
+  # Please be mindful about the jwt string length when generated
+  # You can check the length of generated string by execute the jwt_test.js
+  # The command to run it is node jwt_test.js
+  #

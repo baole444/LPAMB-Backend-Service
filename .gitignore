@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Music track
+storage/music/*.mp3
+
+storage/response/*.mp3
+
+storage/response/process.json
+
+# Ngrok service
+ngrok_run.bat
+
+# Left overs from 0.0.4 and lower.
+audioData.log
+
+# Certificate
+config/cer/cert.pem
+config/cer/csr.pem
+config/cer/key.pem
