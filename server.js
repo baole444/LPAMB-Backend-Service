@@ -15,19 +15,12 @@ const {
 const {
     listTable,
     postQueryMusicSearch,
-    postQueryTitle,
     musicRsDump,
     searchMusic,
     internalPathLookUp,
-    postQueryFullInfo,
     registerUser,
     signinUser,
 } = require('./queryFunction');
-
-const {
-    hasher,
-    hashVerifier,
-} = require('./userAuth/encryption');
 
 const fs = require('fs');
 const path = require('path');
@@ -40,6 +33,14 @@ const accountLimit = rateLimit({
     standardHeaders: 'draft-7',
     legacyHeaders: false,
     message: "Too many account related request from this IP, please try again later.",
+});
+
+const musicLimit = rateLimit({
+    windowMs: 10 * 60 * 1000,
+    limit: 180,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    message: "Too many music related request from this IP, please try again later.",
 });
 
 const port = cfg.server.port;
@@ -60,6 +61,9 @@ function start(dataBase) {
 
     console.log(`Running on ${platform}`);
     
+    server.use('user', accountLimit);
+    server.use('music', musicLimit);
+
     // server get request
     server.get('/', (req, rep) => {
         rep.send('LPAMB back end server.');
@@ -72,38 +76,12 @@ function start(dataBase) {
         term.prompt();
     });
 
-    server.post('/search', async (req, rep) => {
+    server.post('/api/music/search', async (req, rep) => {
         const { data } = req.body;
         console.log(`Request search for "${data}" recieved.`);
         
         try {
             const results = await postQueryMusicSearch(dataBase, data);
-            rep.json(results);
-        } catch (e) {
-            rep.status(404).json({message:e});
-        }
-        term.prompt();
-    })
-
-    server.post('/api/music/fullinfo', async (req, rep) => {
-        const { data } = req.body;
-        console.log(`Request search for "${data}" recieved.`);
-        
-        try {
-            const results = await postQueryFullInfo(dataBase, data);
-            rep.json(results);
-        } catch (e) {
-            rep.status(404).json({message:e});
-        }
-        term.prompt();
-    })
-
-    server.post('/api/music/title', async (req, rep) => {
-        const { data } = req.body;
-        console.log(`Request search for "${data}" recieved.`);
-        
-        try {
-            const results = await postQueryTitle(dataBase, data);
             rep.json(results);
         } catch (e) {
             rep.status(404).json({message:e});
@@ -155,23 +133,24 @@ function start(dataBase) {
         let finalPath;
 
         try {
-            // return the file path from the server's database
-            const file_path = await internalPathLookUp(dataBase, data);
+            const file_path = await internalPathLookUp(dataBase, data.trackID);
             
-            // parsing path into full path
             finalPath = path.join(__dirname, cfg.server.storage, cfg.server.response, `${file_path}`);
-            // check file existence
             if (!fs.existsSync(finalPath)) {
                 console.warn(`Warning: ${file_path}`);
                 term.prompt();
-                
-                return rep.status(404).send('Server encountered an error.');
+                return rep.status(404).json({isMatch: false});
             }
 
-            const md5 = await getMd5Hash()
+            const md5 = await getMd5Hash(finalPath);
+            if (data.md5 === md5) {
+                rep.json({isMatch: true});
+            } else {
+                rep.json({isMatch: false});
+            }
         } catch (e) {
             console.error(e, ': ', finalPath);
-            rep.status(404).send('Server encounting an error checking md5 hash.');
+            rep.status(404).json({isMatch: false});
             term.prompt();
         }
     });
@@ -214,8 +193,6 @@ function start(dataBase) {
             term.prompt();
         }
     });
-
-    server.use('/api/user', accountLimit);
 
     server.post('/api/user/register', async (req, rep) => {
         const { data } = req.body;

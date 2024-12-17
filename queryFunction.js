@@ -65,70 +65,6 @@ async function postQueryMusicSearch(dataBase, title) {
     });
 }
 
-async function postQueryFullInfo(dataBase, id) {
-    const query = `select * from music where track_id = ?`;
-
-    return new Promise((resolve, reject) => {
-        dataBase.query(query, [id], async (error, results) => {
-            if (error) {
-                console.error('Error executing query: ', error);
-                term.prompt();
-                reject('Server encountered an error.\n Please try again later');
-                return;
-            }
-            if (results && results.length > 0) {
-                const row = results[0];
-
-                try {
-                    const artistName = await getArtistTitle(dataBase, row.artist_id);
-                    const albumName = await getAlbumTitle(dataBase, row.album_id);
-
-                    const response = {
-                        trackId: row.track_id,
-                        artistId: row.artist_id,
-                        albumId: row.album_id,
-                        title: row.title,
-                        artist: artistName,
-                        album: albumName,
-                        genre: row.genre,
-                        create_at: new Date(row.created_at).toLocaleString(),
-                    };
-
-                    resolve(response);
-                } catch (fetchError) {
-                    console.error('Error fetching additional data: ', fetchError);
-                    term.prompt();
-                    reject('Server encountered an error.\n Please try again later');
-                }
-            } else {
-                resolve(`There were no results for "${id}".`);
-            }
-        });
-    });
-}
-
-async function postQueryTitle(dataBase, id) {
-    const query = `select title from music where track_id = ?`;
-
-    return new Promise((resolve, reject) => {
-        dataBase.query(query, [id], async (error, results) => {
-            if (error) {
-                console.error('Error executing query: ', error);
-                term.prompt();
-                reject('Server encounter an error.\n Please try again later');
-                return;
-            }
-            if (results && results.length > 0) {
-                const title = results[0].title;
-
-                resolve(title);
-            } else {
-                resolve(`There were no result for "${id}".`);
-            }
-        });
-    });
-}
-
 async function internalPathLookUp(dataBase, track_id) {
     const query = `select file_path from music where track_id = ?;`;
 
@@ -289,19 +225,22 @@ async function registerUser(dataBase, email, username, password) {
 
 async function updateAccountToken(dataBase, jwtToken, userId) {
     if (!jwtToken || !userId) {
-       return Promise.reject(-1);
+       return Promise.reject(-2); // passing value error
     }
 
     const query = `update users set token = ? where user_id = ?`;
     return new Promise((resolve, reject) => {
         dataBase.query(query, [jwtToken, userId], (error) => {
             if (error) {
-                reject(-1);
+                return reject(-1);
             }
+
+            resolve()
         });
     });
 }
 
+// For headerless request (assume login into new device).
 async function signinUser(dataBase, email, password) {
     if (email == null || password == null) {
         console.log('One of curicial field is missing, returning');
@@ -340,16 +279,30 @@ async function signinUser(dataBase, email, password) {
                         } else {
                             // TODO: db store account token now, will figure out session token later.
                             let jwtToken = results[0].token.trim();
+                            const userId = results[0].user_id;
 
-                            if (!jwtToken) {
-                                jwtToken = makeLongAuthToken(results[0].user_id);
-                                // update database with new 
+                            // is token existed, if not make new.
+                            if (!jwtToken || jwtToken.length < 1) {
+                                jwtToken = makeLongAuthToken(userId);
+                                // update database with new  token
+                                try {
+                                    await updateAccountToken(dataBase, jwtToken, userId);
+                                } catch (e) {
+                                    switch (e) {
+                                        case -2:
+                                            return reject(-4); // missing field passed to updateAccountToken.
+                                        case -1:
+                                            return reject(-2); // database cannot update user's token.
+                                        default:
+                                            return reject(-5); 
+                                    }
+                                }  
                             }
+                            return resolve ({ userId: userId, jwtToken: jwtToken });
                         }
                     }
-                        
                 });
-            })
+            });
         } catch (e) {
             console.error(`Sign in failed with critical error. Error:\n ${e.message}`);
             term.prompt();
@@ -358,6 +311,7 @@ async function signinUser(dataBase, email, password) {
     }
 }
 
+// user header contain jwt token.
 async function validateUserJWT(dataBase, jwt) {
     
 }
@@ -365,8 +319,6 @@ async function validateUserJWT(dataBase, jwt) {
 module.exports = {
     listTable,
     postQueryMusicSearch,
-    postQueryFullInfo,
-    postQueryTitle,
     internalPathLookUp,
     musicRsDump,
     searchMusic,
