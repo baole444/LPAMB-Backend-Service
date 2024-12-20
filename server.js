@@ -6,8 +6,12 @@ const cors = require('cors');
 const { spawn } = require('child_process');
 const os = require('os');
 const term = require('./interface');
+const yml = require('js-yaml')
 const { DBconnect, cfg } = require('./connection');
 const { rateLimit } = require('express-rate-limit');
+const fs = require('fs');
+const path = require('path');
+
 const { 
     checkMusic,
     getMd5Hash
@@ -22,8 +26,9 @@ const {
     signinUser,
 } = require('./queryFunction');
 
-const fs = require('fs');
-const path = require('path');
+const ver = yml.load(fs.readFileSync('./config/version.yml', 'utf8'));
+
+
 
 const certificatePath = path.join(__dirname, cfg.server.config, cfg.server.certificate);
 
@@ -70,8 +75,17 @@ function start(dataBase) {
 
     });
 
-    server.trace('/', (req, rep) => {
-        rep.json({ success: true })
+    server.post('/connect', (req, rep) => {
+        const version = ver.version; // server version
+        const { data } = req.body; // client version
+        
+        if (!data.version || version > data.version) {
+            rep.json({ code: -2 }) // code -2 for outdated client
+        } else if (data.version > version) {
+            rep.json({ code: -1 }) // code -1 for outdated service
+        } else if (data.version === version) {
+            rep.json({ code: 0 })
+        }
         console.log(`Server pinged by ${req.ip}`);
         term.prompt();
     });
@@ -241,7 +255,7 @@ function start(dataBase) {
                 const password = data.password;
 
                 const result = await signinUser(dataBase, email, password);
-                
+                rep.json
             }
         } catch (e) {
 

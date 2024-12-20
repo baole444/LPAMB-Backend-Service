@@ -6,7 +6,7 @@ const encrypter = yml.load(fs.readFileSync('../userAuth/encrypter.yml', 'utf8'))
 
 function makeShortAuthToken(userId) {
     try {
-        return jwt.sign({ id: userId }, encrypter.security.jwt_key_short, { expiresIn: '1d' });
+        return jwt.sign({ id: userId }, encrypter.security.jwt_key_short, { expiresIn: '4s' });
     } catch (e) {
         console.error(e.message);
         return `Short token generation failed.`;
@@ -23,11 +23,15 @@ function makeLongAuthToken(userId) {
     }
 }
 
-function authTokenVerify(request, response, next) {
-    const token =  request.headers['authorization']?.split(' ')[1];
-    if (!token) return response.sendStatus(401);
+function authTokenVerify(key) {
+    jwt.verify(key, encrypter.security.jwt_key_short, (error, decoded) => {
+        if (error) {
+            console.error(`Error during token verification:\n >> ${error.message}`);
+            return;
+        }
 
-    jwt.verify(token, encrypter.security.jwt_key_short, (error));
+        console.log(`Token verification was successful:\n >> ${decoded}`);
+    });
 }
 
 function RunTest() {
@@ -41,6 +45,10 @@ function RunTest() {
     console.log(`Short Token length was: ${shortT.length}`);
     console.log(`Long Token length was: ${longT.length}`);
 
+    setTimeout(() => {
+        console.log('Slept for 2 seconds');
+        authTokenVerify(shortT);
+    }, 2000);
     return;
 }
 
