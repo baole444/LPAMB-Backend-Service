@@ -1,26 +1,23 @@
-const perf_hooks = require('perf_hooks');
-const term = require('./interface');
-
 function integerRandomizer(min, max) {
-    return Math.floor(Math.random() *(max - min)) + min;
+    return BigInt(Math.floor(Math.random() * (Number(max) - Number(min))) + Number(min));
 }
 
 // Skip generate 2 or 3 prime from input as this is too small for rsa
 // Prime formulation 6n + 1 or 6n - 1
-function primeGen(n = 1) {
-    if (n < 1) return -1; 
+function primeGen(n = 1n) {
+    if (n < 1n) return -1; 
     const choice = integerRandomizer(0, 1);
 
     if (choice === 1) {
-        return 6*n + 1;
+        return BigInt(6n * n + 1n);
     } else {
-        return 6*n - 1;
+        return BigInt(6n * n - 1n);
     }
 }
 
 function genPairPrime(min, max, diff) {
     const firstInt = integerRandomizer(min, max);
-    const secondInt = integerRandomizer(firstInt + diff, firstInt + max + diff);
+    const secondInt = integerRandomizer(firstInt + diff + min, firstInt + max + diff);
 
     const firstPrime = primeGen(firstInt);
     const secondPrime = primeGen(secondInt);
@@ -33,43 +30,45 @@ function genPairPrime(min, max, diff) {
 }
 
 function findGCD(a, b) {
-    for (let tmp = b; b != 0;) {
-        b = a % b;
-        a = tmp;
-        tmp = b;
-    }
+    a = BigInt(a);
+    b = BigInt(b);
 
+    while (b !== 0n) {
+        [a, b] = [b, a % b];
+    }
     return a;
 }
 
 function findLCM(p, q) {
     const gcd = findGCD(p, q);
-    return (p * q) / gcd;
+    return BigInt((p * q) / gcd);
 }
 
 function findE(CarmichaelTotientN) {
-    let e = 0;
-    while (e < 3) {
-        const choice = integerRandomizer(2, CarmichaelTotientN - 1);
-        if (findGCD(choice, CarmichaelTotientN) === 1) {
-            e = choice;
+    let e = 65537n;
+
+    if (findGCD(e, CarmichaelTotientN) === 1n) {
+        return e;
+    } else {
+        for (let i = e; i < CarmichaelTotientN; i++) {
+            if (findGCD(i, CarmichaelTotientN) === 1n) {
+                return i;
+            }
         }
     }
-    return e;
 }
 
 function modInverse(e, CarmichaelTotientN) {
-    let coefficient = 0, newCoefficient = 1;
+    let coefficient = 0n, newCoefficient = 1n;
     let remainder = CarmichaelTotientN, newRemainder = e;
+    while (newRemainder !== 0n) {
+        const quotient = remainder / newRemainder;
 
-    while (newRemainder !== 0) {
-        const quotient = Math.floor(remainder / newRemainder);
-
-        [coefficient, newCoefficient] = [newCoefficient, coefficient - quotient * newCoefficient];
-        [remainder, newRemainder] = [newRemainder, remainder - quotient * newRemainder];
+        [coefficient, newCoefficient] = [newCoefficient, (coefficient - quotient * newCoefficient) % CarmichaelTotientN];
+        [remainder, newRemainder] = [newRemainder, remainder % newRemainder];
     }
 
-    if (coefficient < 0) {
+    if (coefficient < 0n) {
         coefficient += CarmichaelTotientN;
     }
 
@@ -77,28 +76,64 @@ function modInverse(e, CarmichaelTotientN) {
 }
 
 function keyGen(min, max, diff) {
-    console.log('Generating new public and private key.');
-
-    const startTime = perf_hooks.performance.now();
+    min = BigInt(min);
+    max = BigInt(max);
+    diff = BigInt(diff);
 
     const { p, q } = genPairPrime(min, max, diff);
 
+    //console.log('Primes selected:');
+    //console.log(`p: ${p}`);
+    //console.log(`q: ${q}`);
+
     const n = p * q;
+    //console.log(`n: ${n}`);
 
-    const CarmichaelTotientN = findLCM(p - 1, q - 1);
+    const CarmichaelTotientN = findLCM(p - 1n, q - 1n);
+    //console.log(`Lambda N: ${CarmichaelTotientN}`);
 
-    const e =  findE(CarmichaelTotientN);
+    const e = findE(CarmichaelTotientN);
+    //console.log(`e: ${e}`);
 
     const d = modInverse(e, CarmichaelTotientN);
+    //console.log(`d: ${d}`);
 
     const publicKey = { n, e };
     const privateKey = { n, d };
 
-    const endTime = perf_hooks.performance.now();
-    console.log(`Key generation took ${Math.floor(endTime) - Math.floor(startTime)}ms.`);
     return { publicKey, privateKey }
+}
+
+function keyGenTest(n, e, d) {
+
+    const publicKey = { n, e };
+    const privateKey = { n, d };
+
+    return { publicKey, privateKey }
+}
+
+function modExpo(m, e, n) {
+    if (n === 1n) return 0n;
+
+    let result = 1n;
+
+    m = m % n;
+
+    while (e > 0n) {
+        if (e % 2n === 1n) {
+            result = (result * m) % n;
+        }
+
+        e = e / 2n;
+
+        m = (m * m) % n;
+    }
+
+    return result;
 }
 
 module.exports = {
     keyGen,
+    modExpo,
+    keyGenTest,
 }
