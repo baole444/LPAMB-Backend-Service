@@ -113,6 +113,7 @@ function keyGenTest(n, e, d) {
 }
 
 function modExpo(m, e, n) {
+    //console.log(`modExpo input: m=${m}, e=${e}, n=${n}`);
     if (n === 1n) return 0n;
 
     let result = 1n;
@@ -128,7 +129,7 @@ function modExpo(m, e, n) {
 
         m = (m * m) % n;
     }
-
+    //console.log(`modExpo output: result=${result}`);
     return result;
 }
 
